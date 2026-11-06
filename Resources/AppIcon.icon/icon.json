@@ -1,0 +1,20 @@
+{
+  "fill": {"automatic-gradient": "display-p3:1.00000,0.50196,0.10196,1.00000"},
+  "groups": [
+    {
+      "name": "Cursor",
+      "layers": [{"name": "Cursor", "image-name": "Cursor.svg"}],
+      "shadow": {"kind": "neutral", "opacity": 0.4},
+      "specular": true,
+      "translucency": {"enabled": true, "value": 0.3}
+    },
+    {
+      "name": "Voice",
+      "layers": [{"name": "Voice", "image-name": "Voice.svg"}],
+      "shadow": {"kind": "neutral", "opacity": 0.45},
+      "specular": true,
+      "translucency": {"enabled": true, "value": 0.35}
+    }
+  ],
+  "supported-platforms": {"squares": "shared"}
+}

@@ -1,0 +1,6 @@
+.build/
+*.app/
+.DS_Store
+work/
+Scripts/signing.local
+.swiftpm/

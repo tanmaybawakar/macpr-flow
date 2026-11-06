@@ -41,24 +41,29 @@ Macpr Flow is a menu-bar dictation app for Apple silicon Macs. It transcribes wi
 
 ## Install
 
-Macpr Flow is distributed as source. Build and install it with one script:
+**Download the app:** grab `MacprFlow-<version>.dmg` from the [latest release](https://github.com/tanmaybawakar/macpr-flow/releases/latest), open it, and drag **Macpr Flow** into **Applications**.
+
+The app isn't notarized yet, so the first time you open it macOS will block it. Either right-click the app → **Open** → **Open**, or go to **System Settings → Privacy & Security** and click **Open Anyway**. If macOS says the app is damaged, run:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Macpr Flow.app"
+```
+
+### Build from source
 
 ```sh
 git clone https://github.com/tanmaybawakar/macpr-flow.git
 cd macpr-flow
-Scripts/package_app.sh
+Scripts/package_app.sh      # build, sign and install to /Applications
+Scripts/make_dmg.sh         # or build a .dmg in .build/
 ```
 
-This builds a release binary, compiles the icon, signs the app and installs a copy at `/Applications/Macpr Flow.app`. Pass `INSTALL=0` to build without installing.
-
-**Signing.** Without a signing identity the app is ad-hoc signed, and macOS asks for Microphone and Accessibility permission again after each rebuild. To keep those permissions, sign with your own Apple Development identity:
+Without a signing identity the app is ad-hoc signed, and macOS asks for Microphone and Accessibility again after each rebuild. To keep those permissions, sign with your own identity:
 
 ```sh
-security find-identity -v -p codesigning           # list your identities
-echo 'APP_IDENTITY=<your identity hash>' > Scripts/signing.local
+security find-identity -v -p codesigning
+echo 'APP_IDENTITY=<your identity hash>' > Scripts/signing.local   # git-ignored
 ```
-
-`Scripts/signing.local` is git-ignored.
 
 ## First run
 

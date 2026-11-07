@@ -6,28 +6,47 @@ enum CorrectionLearner {
     struct Correction: Equatable, Hashable {
         let heard: String
         let term: String
+        /// The heard form is an everyday word ("cloud" → "Claude"), so it must be corrected twice
+        /// before every future "cloud" is rewritten. The term still joins the recognizer's vocabulary at once.
+        var needsConfirmation = false
+
+        var key: String { "\(heard)→\(term.lowercased())" }
     }
 
+    /// `known` holds `Correction.key`s already in the dictionary, so a fix is learned once.
     /// `isCommonWord` keeps ordinary rewrites ("their" → "there") out of the dictionary.
     static func corrections(inserted: String, edited: String, known: Set<String>,
                             isCommonWord: (String) -> Bool) -> [Correction] {
         let a = tokens(inserted), b = tokens(edited)
         guard !a.isEmpty, !b.isEmpty else { return [] }
+        func squash(_ s: String) -> String { s.lowercased().filter { $0.isLetter || $0.isNumber } }
         var found: [Correction] = []
         for block in substitutions(a, b) {
-            let heard = block.removed.joined(separator: " ")
             guard (1...3).contains(block.removed.count) else { continue }
-            let squashed = heard.lowercased().filter { $0.isLetter || $0.isNumber }
-            let best = block.added
-                .map { ($0, similarity(squashed, $0.lowercased().filter { $0.isLetter || $0.isNumber })) }
-                .max { $0.1 < $1.1 }
+            let heard = block.removed.joined(separator: " ")
+            // The replacement can be one word or a short phrase ("macro flow" → "Macpr Flow").
+            var candidates: [String] = []
+            for start in block.added.indices {
+                for length in 1...3 where start + length <= block.added.count {
+                    candidates.append(block.added[start..<start + length].joined(separator: " "))
+                }
+            }
+            let best = candidates.map { ($0, similarity(squash(heard), squash($0))) }.max { $0.1 < $1.1 }
             guard let (term, score) = best, term.count >= 2, term.contains(where: \.isLetter) else { continue }
+            let words = term.split(separator: " ").map(String.init)
+            let innerCaps = words.contains { $0.dropFirst().contains(where: \.isUppercase) }
             let caseOnly = heard.lowercased() == term.lowercased() && heard != term
-            guard caseOnly || score >= 0.5, heard.lowercased() != term.lowercased() || caseOnly else { continue }
-            let innerCaps = term.dropFirst().contains(where: \.isUppercase)
-            guard innerCaps || !isCommonWord(term.lowercased()) else { continue }
-            guard !known.contains(term.lowercased()) else { continue }
-            found.append(Correction(heard: heard.lowercased(), term: term))
+            let properNoun = term.first?.isUppercase == true && heard.first?.isLowercase == true
+            let unusual = words.contains { !isCommonWord($0.lowercased()) }
+            if caseOnly {
+                guard innerCaps || unusual || words.count > 1 else { continue }
+            } else {
+                guard score >= 0.45, innerCaps || properNoun || unusual else { continue }
+            }
+            let heardIsCommon = !caseOnly && block.removed.count == 1 && isCommonWord(heard.lowercased())
+            let correction = Correction(heard: heard.lowercased(), term: term, needsConfirmation: heardIsCommon)
+            guard !known.contains(correction.key) else { continue }
+            found.append(correction)
         }
         return found
     }
@@ -99,15 +118,15 @@ final class CorrectionWatcher {
         let length = inserted.utf16.count
         task = Task { @MainActor [weak self] in
             var lastSeen: Set<CorrectionLearner.Correction> = []
-            var learned: Set<String> = []
-            for _ in 0..<12 {
-                do { try await Task.sleep(for: .seconds(4)) } catch { return }
+            var learned: Set<String> = []  // keys
+            for _ in 0..<40 {
+                do { try await Task.sleep(for: .seconds(3)) } catch { return }
                 guard let value = Inserter.text(of: context.element) else { return }
                 let window = Self.window(of: value, from: context.location, length: length)
                 let found = Set(CorrectionLearner.corrections(inserted: inserted, edited: window, known: known(),
                                                               isCommonWord: Self.isCommonWord))
-                for correction in found.intersection(lastSeen) where !learned.contains(correction.term) {
-                    learned.insert(correction.term)
+                for correction in found.intersection(lastSeen) where !learned.contains(correction.key) {
+                    learned.insert(correction.key)
                     self?.onLearn?(correction)
                 }
                 lastSeen = found

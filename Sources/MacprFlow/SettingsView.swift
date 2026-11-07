@@ -337,7 +337,7 @@ private struct DictionaryPane: View {
             Section {
                 Toggle("Learn from your corrections", isOn: $prefs.learnFromEdits)
             } footer: {
-                Text("When you fix a name or term right after dictating it, Macpr Flow adds the fix here so it's right next time.")
+                Text("Fix a misheard name or term in the text Macpr Flow typed, and it learns: the word joins your dictionary and the recognizer listens for it. Fixes to everyday words (like \u{201C}cloud\u{201D} → \u{201C}Claude\u{201D}) apply automatically once you've made them twice.")
             }
 
             Section("Your words") {

@@ -58,9 +58,47 @@ final class Preferences: ObservableObject {
         max(0, Int((Double(wordsDictated) / 40 - secondsSpeaking / 60).rounded()))
     }
 
+    enum LearnOutcome { case added, newSpelling, listening, nothing }
+
+    /// Every "heard → term" pair already in the dictionary, in the form `Correction.key` uses.
+    var learnedKeys: Set<String> {
+        Set(dictionary.flatMap { entry in
+            ([entry.term] + entry.variants).map { "\($0.lowercased())→\(entry.term.lowercased())" }
+        })
+    }
+
+    /// Folds a correction into the dictionary. A fix of an everyday word waits for a second sighting
+    /// before it rewrites that word; until then the term only steers the recognizer.
+    @discardableResult
+    func learn(_ correction: CorrectionLearner.Correction) -> LearnOutcome {
+        var pending = defaults.dictionary(forKey: "pendingCorrections") as? [String: Int] ?? [:]
+        var addVariant = true
+        if correction.needsConfirmation {
+            let seen = (pending[correction.key] ?? 0) + 1
+            pending[correction.key] = seen
+            addVariant = seen >= 2
+            if addVariant { pending[correction.key] = nil }
+            defaults.set(pending, forKey: "pendingCorrections")
+        }
+        if let index = dictionary.firstIndex(where: { $0.term.caseInsensitiveCompare(correction.term) == .orderedSame }) {
+            var entry = dictionary[index]
+            let hadSpelling = entry.term == correction.term
+            entry.term = correction.term
+            let fresh = addVariant && correction.heard != correction.term.lowercased()
+                && !entry.variants.contains { $0.caseInsensitiveCompare(correction.heard) == .orderedSame }
+            if fresh { entry.heardAs = (entry.variants + [correction.heard]).joined(separator: ", ") }
+            guard fresh || !hadSpelling else { return .nothing }
+            dictionary.remove(at: index)
+            dictionary.insert(entry, at: 0)
+            return .newSpelling
+        }
+        let heardAs = addVariant && correction.heard != correction.term.lowercased() ? correction.heard : ""
+        dictionary.insert(DictionaryEntry(term: correction.term, heardAs: heardAs, learned: true), at: 0)
+        return addVariant ? .added : .listening
+    }
+
     func learn(term: String, heardAs: String) {
-        guard !dictionary.contains(where: { $0.term.caseInsensitiveCompare(term) == .orderedSame }) else { return }
-        dictionary.insert(DictionaryEntry(term: term, heardAs: heardAs, learned: true), at: 0)
+        learn(CorrectionLearner.Correction(heard: heardAs.lowercased(), term: term))
     }
 
     var terms: [String] { dictionary.map(\.term) }

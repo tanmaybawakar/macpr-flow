@@ -164,13 +164,35 @@ private let common: @Sendable (String) -> Bool = { ["there", "their", "meeting",
 @Test func ignoresOrdinaryRewritesAndKnownWords() {
     #expect(CorrectionLearner.corrections(inserted: "Put it over their.", edited: "Put it over there.", known: [], isCommonWord: common).isEmpty)
     #expect(CorrectionLearner.corrections(inserted: "Send the report.", edited: "Send the meeting notes.", known: [], isCommonWord: common).isEmpty)
-    #expect(CorrectionLearner.corrections(inserted: "Ask super base.", edited: "Ask Supabase.", known: ["supabase"], isCommonWord: common).isEmpty)
+    #expect(CorrectionLearner.corrections(inserted: "Ask super base.", edited: "Ask Supabase.", known: ["super base→supabase"], isCommonWord: common).isEmpty)
     #expect(CorrectionLearner.corrections(inserted: "Hello there.", edited: "Hello there.", known: [], isCommonWord: common).isEmpty)
 }
 
 @Test func learnsBrandCasing() {
     let found = CorrectionLearner.corrections(inserted: "Push to github now.", edited: "Push to GitHub now.", known: [], isCommonWord: { _ in true })
     #expect(found.map(\.term) == ["GitHub"])
+}
+
+@Test func learnsProperNounsHeardAsEverydayWords() {
+    let found = CorrectionLearner.corrections(inserted: "Ask cloud to review it.", edited: "Ask Claude to review it.",
+                                              known: [], isCommonWord: { _ in true })
+    #expect(found == [.init(heard: "cloud", term: "Claude", needsConfirmation: true)])
+}
+
+@Test func learnsMultiWordTerms() {
+    let found = CorrectionLearner.corrections(inserted: "Open macro flow settings.", edited: "Open Macpr Flow settings.",
+                                              known: [], isCommonWord: common)
+    #expect(found.map(\.term) == ["Macpr Flow"])
+}
+
+@MainActor @Test func secondSpellingJoinsExistingEntryAndEverydayWordsNeedTwoFixes() {
+    let prefs = Preferences(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+    #expect(prefs.learn(.init(heard: "clod", term: "Claude")) == .added)
+    #expect(prefs.learn(.init(heard: "cloud", term: "Claude", needsConfirmation: true)) == .nothing)
+    #expect(prefs.dictionary.first?.variants == ["clod"])
+    #expect(prefs.learn(.init(heard: "cloud", term: "Claude", needsConfirmation: true)) == .newSpelling)
+    #expect(prefs.dictionary.count == 1 && prefs.dictionary.first?.variants == ["clod", "cloud"])
+    #expect(prefs.learnedKeys.contains("cloud→claude"))
 }
 
 @Test func snippetsMatchTheWholeUtterance() {

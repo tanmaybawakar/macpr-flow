@@ -58,8 +58,13 @@ final class FlowController: ObservableObject {
         recorder.onFailure = { [weak self] message in self?.fail(message) }
         watcher.onLearn = { [weak self] correction in
             guard let self, prefs.learnFromEdits else { return }
-            prefs.learn(term: correction.term, heardAs: correction.heard)
-            if !phase.busy { flash(.success, "Added \u{201C}\(correction.term)\u{201D} to your dictionary.") }
+            let message: String? = switch prefs.learn(correction) {
+            case .added: "Learned \u{201C}\(correction.term)\u{201D}. It\u{2019}ll be spelled your way from now on."
+            case .newSpelling: "Learned that \u{201C}\(correction.heard)\u{201D} means \u{201C}\(correction.term)\u{201D}."
+            case .listening: "Added \u{201C}\(correction.term)\u{201D}. Fix it once more and \u{201C}\(correction.heard)\u{201D} becomes it automatically."
+            case .nothing: nil
+            }
+            if let message, !phase.busy { flash(.success, message) }
         }
 
         prefs.$trigger.sink { [weak self] in self?.hotkey.setKey($0) }.store(in: &bag)
@@ -286,9 +291,7 @@ final class FlowController: ObservableObject {
         switch result {
         case .copied(let reason): flash(.info, reason)
         case .pasted(let context?) where prefs.learnFromEdits:
-            watcher.watch(inserted: text, at: context) { [weak self] in
-                Set((self?.prefs.dictionary ?? []).map { $0.term.lowercased() })
-            }
+            watcher.watch(inserted: text, at: context) { [weak self] in self?.prefs.learnedKeys ?? [] }
         case .pasted: break
         }
     }

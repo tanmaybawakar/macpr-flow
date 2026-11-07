@@ -130,6 +130,12 @@ enum Inserter {
     // MARK: Smart spacing
 
     static func caretContext() -> CaretContext? {
+        // Electron apps (Slack, Notion, VS Code…) only expose their text once asked to.
+        if let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier {
+            let app = AXUIElementCreateApplication(pid)
+            AXUIElementSetMessagingTimeout(app, 0.15)
+            AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+        }
         let system = AXUIElementCreateSystemWide()
         AXUIElementSetMessagingTimeout(system, 0.15)
         guard let focused = value(system, kAXFocusedUIElementAttribute), CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
